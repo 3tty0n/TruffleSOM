@@ -327,7 +327,7 @@ if args.interpreter:
               '-Dpolyglot.engine.WarnInterpreterOnly=false']
 else:
     flags += GRAAL_JVMCI_FLAGS
-    flags += ['-Dpolyglot.engine.MultiTier=false',
+    flags += ['-Dpolyglot.engine.MultiTier=true',
               '-Dpolyglot.engine.DynamicCompilationThresholds=false',
               '-Dpolyglot.engine.SingleTierCompilationThreshold=253',
               '-Dpolyglot.engine.Mode=throughput',
