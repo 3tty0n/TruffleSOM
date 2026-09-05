@@ -105,6 +105,10 @@ public abstract class ArgumentReadNode {
     protected final int   argumentIndex;
     public final Argument arg;
 
+    public boolean isSelfRead() {
+      return argumentIndex == 0;
+    }
+
     public NonLocalArgumentReadNode(final Argument arg, final int contextLevel) {
       super(contextLevel);
       assert contextLevel > 0;

@@ -443,6 +443,7 @@ public final class Universe {
 
     result = Universe.loadClass(name, null);
     loadPrimitives(result, false);
+    StaticSendBinder.classLoaded(result);
 
     setGlobal(name, result);
 
@@ -475,6 +476,7 @@ public final class Universe {
     }
 
     loadPrimitives(result, true);
+    StaticSendBinder.classLoaded(result);
   }
 
   @TruffleBoundary

@@ -6,6 +6,10 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 
 import trufflesom.bdt.primitives.Specializer;
 import trufflesom.bdt.primitives.nodes.PreevaluatedExpression;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives;
+
+import trufflesom.interpreter.nodes.dispatch.AbstractDispatchNode;
 import trufflesom.interpreter.nodes.dispatch.UninitializedDispatchNode;
 import trufflesom.primitives.Primitives;
 import trufflesom.vm.NotYetImplementedException;
@@ -38,6 +42,52 @@ public final class MessageSendNode {
       final ExpressionNode[] argumentNodes, final long coord) {
     return new GenericMessageSendNode(selector, argumentNodes,
         new UninitializedDispatchNode(selector)).initialize(coord);
+  }
+
+  public static AbstractMessageSendNode createBoundSelfSend(final SSymbol selector,
+      final ExpressionNode[] arguments, final SInvokable method, final Assumption assumption,
+      final long coord) {
+    DirectCallNode call = Truffle.getRuntime().createDirectCallNode(method.getCallTarget());
+    return new BoundSelfSendNode(selector, arguments, call, assumption).initialize(coord);
+  }
+
+  public static final class BoundSelfSendNode extends AbstractMessageSendNode {
+    private final SSymbol    selector;
+    private final Assumption stillValid;
+
+    @Child private DirectCallNode target;
+
+    private BoundSelfSendNode(final SSymbol selector, final ExpressionNode[] arguments,
+        final DirectCallNode target, final Assumption stillValid) {
+      super(selector.getNumberOfSignatureArguments(), arguments);
+      this.selector = selector;
+      this.target = target;
+      this.stillValid = stillValid;
+    }
+
+    @Override
+    public Object doPreEvaluated(final VirtualFrame frame, final Object[] arguments) {
+      if (!stillValid.isValid()) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        AbstractDispatchNode dispatch = new UninitializedDispatchNode(selector);
+        GenericMessageSendNode send =
+            new GenericMessageSendNode(selector, argumentNodes, dispatch).initialize(sourceCoord);
+        replace(send);
+        dispatch.notifyAsInserted();
+        return send.doPreEvaluated(frame, arguments);
+      }
+      return target.call(arguments);
+    }
+
+    @Override
+    public String getInvocationIdentifier() {
+      return selector.getString();
+    }
+
+    @Override
+    public String toString() {
+      return "BoundSelfSend(" + selector.getString() + ")";
+    }
   }
 
   public static AbstractMessageSendNode createSuperSend(final SClass superClass,

@@ -6,7 +6,9 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import trufflesom.bdt.primitives.Specializer;
 import trufflesom.bdt.primitives.nodes.PreevaluatedExpression;
 import trufflesom.interpreter.nodes.dispatch.AbstractDispatchNode;
+import trufflesom.interpreter.nodes.dispatch.GenericDispatchNode;
 import trufflesom.interpreter.nodes.dispatch.UninitializedDispatchNode;
+import trufflesom.vm.SendPlacement;
 import trufflesom.primitives.Primitives;
 import trufflesom.vmobjects.SSymbol;
 
@@ -55,8 +57,18 @@ public final class UninitializedMessageSendNode extends AbstractMessageSendNode 
     return makeGenericSend();
   }
 
+  public SSymbol getSelector() {
+    return selector;
+  }
+
+  public ExpressionNode[] getArgumentNodes() {
+    return argumentNodes;
+  }
+
   private GenericMessageSendNode makeGenericSend() {
-    AbstractDispatchNode dispatch = new UninitializedDispatchNode(selector);
+    AbstractDispatchNode dispatch = SendPlacement.JIT
+        ? new GenericDispatchNode(selector)
+        : new UninitializedDispatchNode(selector);
     GenericMessageSendNode send = new GenericMessageSendNode(selector, argumentNodes,
         dispatch).initialize(sourceCoord);
     replace(send);

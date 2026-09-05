@@ -190,6 +190,17 @@ public final class SClass extends SObject {
     return invokablesTable.values();
   }
 
+  public SInvokable lookupOwnInvokable(final SSymbol selector) {
+    if (invokablesTable == null) {
+      return null;
+    }
+    SInvokable invokable = invokablesTable.get(selector);
+    if (invokable != null && invokable.getHolder() == this) {
+      return invokable;
+    }
+    return null;
+  }
+
   @TruffleBoundary
   public SInvokable lookupInvokable(final SSymbol selector) {
     SInvokable invokable;
