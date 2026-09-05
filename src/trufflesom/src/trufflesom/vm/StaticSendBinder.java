@@ -1,6 +1,10 @@
 package trufflesom.vm;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,6 +13,7 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.NodeUtil;
 
+import trufflesom.bdt.primitives.nodes.PreevaluatedExpression;
 import trufflesom.interpreter.nodes.ArgumentReadNode.LocalArgumentReadNode;
 import trufflesom.interpreter.nodes.ArgumentReadNode.NonLocalArgumentReadNode;
 import trufflesom.interpreter.nodes.ExpressionNode;
@@ -39,12 +44,20 @@ public final class StaticSendBinder {
   private static int noParent;
   private static int noTarget;
   private static int overridden;
+  private static int inlined;
   private static boolean statsHooked;
+
+  // profile-guided placement (pgo)
+  private static boolean             profileLoaded;
+  private static final Map<String, Boolean> exactGeneric    = new HashMap<>();
+  private static final Map<String, Boolean> fallbackGeneric = new HashMap<>();
+  private static int                 genericSites;
+  private static int                 matchedSites;
 
   private StaticSendBinder() {}
 
   public static void classLoaded(final SClass clazz) {
-    if (!SendPlacement.AOT || clazz == null) {
+    if (!(SendPlacement.AOT || SendPlacement.PGO) || clazz == null) {
       return;
     }
     hookStats();
@@ -53,6 +66,13 @@ public final class StaticSendBinder {
     invalidateOverridden(metaclass);
     classes.add(clazz);
     classes.add(metaclass);
+    if (SendPlacement.PGO) {
+      if (!profileLoaded) {
+        loadProfile();
+      }
+      markGenericSites(clazz);
+      markGenericSites(metaclass);
+    }
     bindClass(clazz);
     bindClass(metaclass);
   }
@@ -62,9 +82,15 @@ public final class StaticSendBinder {
       return;
     }
     statsHooked = true;
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> System.err.println(
-        "static-send: candidates=" + candidates + " bound=" + bound + " unbound=" + unbound
-            + " noParent=" + noParent + " noTarget=" + noTarget + " overridden=" + overridden)));
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      System.err.println(
+          "static-send: candidates=" + candidates + " bound=" + bound + " unbound=" + unbound
+              + " noParent=" + noParent + " noTarget=" + noTarget + " overridden=" + overridden
+              + " inlined_sites=" + inlined);
+      if (SendPlacement.PGO) {
+        System.err.println("pgo: generic_sites=" + genericSites + " matched=" + matchedSites);
+      }
+    }));
   }
 
   private static boolean isSubclass(final SClass clazz, final SClass ancestor) {
@@ -166,8 +192,16 @@ public final class StaticSendBinder {
       }
       Assumption assumption =
           Truffle.getRuntime().createAssumption("self-send " + selector.getString());
-      node.replace(MessageSendNode.createBoundSelfSend(selector, node.getArgumentNodes(),
-          target, assumption, node.getSourceCoordinate()));
+      PreevaluatedExpression trivial =
+          SendPlacement.SEND_INLINE ? target.copyTrivialNode() : null;
+      if (trivial != null) {
+        node.replace(MessageSendNode.createInlinedSelfSend(selector, node.getArgumentNodes(),
+            trivial, assumption, node.getSourceCoordinate()));
+        inlined++;
+      } else {
+        node.replace(MessageSendNode.createBoundSelfSend(selector, node.getArgumentNodes(),
+            target, assumption, node.getSourceCoordinate()));
+      }
       List<Site> list = sites.get(selector);
       if (list == null) {
         list = new ArrayList<>();
@@ -175,6 +209,141 @@ public final class StaticSendBinder {
       }
       list.add(new Site(clazz, assumption));
       bound++;
+    }
+  }
+
+  // ---- profile-guided placement (pgo) ----
+
+  private static boolean isGeneric(final int distinctClasses, final long lastNewClassIndex,
+      final long sendsTotal) {
+    if (distinctClasses >= 5) {
+      return true;
+    }
+    return distinctClasses > 1 && sendsTotal > 0 && lastNewClassIndex > 0.5 * sendsTotal;
+  }
+
+  private static void loadProfile() {
+    profileLoaded = true;
+    String path = SendPlacement.SEND_PROFILE;
+    if (path == null) {
+      return;
+    }
+    List<String> lines;
+    try {
+      lines = Files.readAllLines(Paths.get(path));
+    } catch (IOException e) {
+      return;
+    }
+
+    boolean inSites = false;
+    long sendsTotal = 0;
+    Map<String, boolean[]> agg = new HashMap<>();
+
+    for (String line : lines) {
+      if (line.isEmpty()) {
+        continue;
+      }
+      if (line.equals("# sites")) {
+        inSites = true;
+        continue;
+      }
+      if (line.equals("# summary")) {
+        inSites = false;
+        continue;
+      }
+      if (!inSites) {
+        if (line.startsWith("sends_total\t")) {
+          sendsTotal = Long.parseLong(line.substring("sends_total\t".length()));
+        }
+        continue;
+      }
+
+      String[] parts = line.split("\t", -1);
+      if (parts.length != 9 || parts[0].equals("holder")) {
+        continue;
+      }
+      String holder = parts[0];
+      String signature = parts[1];
+      String selector = parts[3];
+      int ordinal = Integer.parseInt(parts[4]);
+      int distinctClasses = Integer.parseInt(parts[6]);
+      long lastNewClassIndex = Long.parseLong(parts[8]);
+      boolean generic = isGeneric(distinctClasses, lastNewClassIndex, sendsTotal);
+
+      exactGeneric.put(key(holder, signature, selector, ordinal), generic);
+
+      String selKey = holder + " " + selector;
+      boolean[] a = agg.computeIfAbsent(selKey, k -> new boolean[2]);
+      if (generic) {
+        a[0] = true;
+      } else {
+        a[1] = true;
+      }
+    }
+
+    for (Map.Entry<String, boolean[]> e : agg.entrySet()) {
+      boolean[] a = e.getValue();
+      if (a[0] ^ a[1]) {
+        fallbackGeneric.put(e.getKey(), a[0]);
+      }
+    }
+  }
+
+  private static String key(final String holder, final String signature, final String selector,
+      final int ordinal) {
+    return holder + " " + signature + " " + selector + " " + ordinal;
+  }
+
+  private static Boolean lookupGeneric(final String holder, final String signature,
+      final String selector, final int ordinal) {
+    Boolean exact = exactGeneric.get(key(holder, signature, selector, ordinal));
+    if (exact != null) {
+      return exact;
+    }
+    return fallbackGeneric.get(holder + " " + selector);
+  }
+
+  private static void markGenericSites(final SClass clazz) {
+    if (clazz.getInstanceInvokablesForDisassembler() == null) {
+      return;
+    }
+    for (SInvokable inv : clazz.getInstanceInvokablesForDisassembler()) {
+      if (inv.getHolder() == clazz) {
+        markGenericInvokable(inv, clazz);
+      }
+    }
+  }
+
+  private static void markGenericInvokable(final SInvokable inv, final SClass clazz) {
+    inv.getCallTarget();
+    List<UninitializedMessageSendNode> nodes = new ArrayList<>(
+        NodeUtil.findAllNodeInstances(inv.getInvokable(), UninitializedMessageSendNode.class));
+    nodes.sort(Comparator.comparingLong(UninitializedMessageSendNode::getSourceCoordinate));
+
+    String holderName = clazz.getName().getString();
+    String sigName = inv.getSignature().getString();
+    Map<SSymbol, Integer> ordinalCounter = new HashMap<>();
+
+    for (UninitializedMessageSendNode node : nodes) {
+      SSymbol selector = node.getSelector();
+      int ordinal = ordinalCounter.merge(selector, 1, Integer::sum) - 1;
+
+      Boolean generic = lookupGeneric(holderName, sigName, selector.getString(), ordinal);
+      if (generic == null) {
+        continue;
+      }
+      matchedSites++;
+      if (generic && node.getParent() != null) {
+        node.replace(MessageSendNode.createGenericDispatch(selector, node.getArgumentNodes(),
+            node.getSourceCoordinate()));
+        genericSites++;
+      }
+    }
+
+    if (inv instanceof SMethod) {
+      for (SMethod block : ((SMethod) inv).getEmbeddedBlocks()) {
+        markGenericInvokable(block, clazz);
+      }
     }
   }
 }

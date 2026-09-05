@@ -10,6 +10,7 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 
 import trufflesom.interpreter.nodes.dispatch.AbstractDispatchNode;
+import trufflesom.interpreter.nodes.dispatch.GenericDispatchNode;
 import trufflesom.interpreter.nodes.dispatch.UninitializedDispatchNode;
 import trufflesom.primitives.Primitives;
 import trufflesom.vm.NotYetImplementedException;
@@ -44,11 +45,62 @@ public final class MessageSendNode {
         new UninitializedDispatchNode(selector)).initialize(coord);
   }
 
+  public static GenericMessageSendNode createGenericDispatch(final SSymbol selector,
+      final ExpressionNode[] argumentNodes, final long coord) {
+    return new GenericMessageSendNode(selector, argumentNodes,
+        new GenericDispatchNode(selector)).initialize(coord);
+  }
+
   public static AbstractMessageSendNode createBoundSelfSend(final SSymbol selector,
       final ExpressionNode[] arguments, final SInvokable method, final Assumption assumption,
       final long coord) {
     DirectCallNode call = Truffle.getRuntime().createDirectCallNode(method.getCallTarget());
     return new BoundSelfSendNode(selector, arguments, call, assumption).initialize(coord);
+  }
+
+  public static AbstractMessageSendNode createInlinedSelfSend(final SSymbol selector,
+      final ExpressionNode[] arguments, final PreevaluatedExpression expr,
+      final Assumption assumption, final long coord) {
+    return new InlinedSelfSendNode(selector, arguments, expr, assumption).initialize(coord);
+  }
+
+  public static final class InlinedSelfSendNode extends AbstractMessageSendNode {
+    private final SSymbol    selector;
+    private final Assumption stillValid;
+
+    @Child private ExpressionNode expr;
+
+    private InlinedSelfSendNode(final SSymbol selector, final ExpressionNode[] arguments,
+        final PreevaluatedExpression expr, final Assumption stillValid) {
+      super(selector.getNumberOfSignatureArguments(), arguments);
+      this.selector = selector;
+      this.expr = (ExpressionNode) expr;
+      this.stillValid = stillValid;
+    }
+
+    @Override
+    public Object doPreEvaluated(final VirtualFrame frame, final Object[] arguments) {
+      if (!stillValid.isValid()) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        AbstractDispatchNode dispatch = new UninitializedDispatchNode(selector);
+        GenericMessageSendNode send =
+            new GenericMessageSendNode(selector, argumentNodes, dispatch).initialize(sourceCoord);
+        replace(send);
+        dispatch.notifyAsInserted();
+        return send.doPreEvaluated(frame, arguments);
+      }
+      return expr.doPreEvaluated(frame, arguments);
+    }
+
+    @Override
+    public String getInvocationIdentifier() {
+      return selector.getString();
+    }
+
+    @Override
+    public String toString() {
+      return "InlinedSelfSend(" + selector.getString() + ")";
+    }
   }
 
   public static final class BoundSelfSendNode extends AbstractMessageSendNode {
