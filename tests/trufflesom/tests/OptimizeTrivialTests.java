@@ -419,7 +419,7 @@ public class OptimizeTrivialTests extends TruffleTestSetup {
     SObject object = new SObject(clazz, new ObjectLayout(numFields, clazz));
     AbstractDispatchNode dispatch =
         UninitializedDispatchNode.createDispatch(object, symbolFor(methodName),
-            null);
+            null, false);
     assertThat(dispatch, instanceOf(expectedClass));
   }
 
@@ -488,7 +488,7 @@ public class OptimizeTrivialTests extends TruffleTestSetup {
     SClass objClazz = constructDummyObjectClass();
     SClass clazz = parseMethodAndConstructClass("test = ()", objClazz);
     AbstractDispatchNode dispatch =
-        UninitializedDispatchNode.createDispatch(clazz, symbolFor("new"), null);
+        UninitializedDispatchNode.createDispatch(clazz, symbolFor("new"), null, false);
     assertThat(dispatch, instanceOf(CachedNewObject.class));
   }
 

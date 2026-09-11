@@ -16,9 +16,15 @@ import trufflesom.vmobjects.SSymbol;
 
 public final class UninitializedDispatchNode extends AbstractDispatchNode {
   private final SSymbol selector;
+  private final boolean boundary;
 
   public UninitializedDispatchNode(final SSymbol selector) {
+    this(selector, false);
+  }
+
+  public UninitializedDispatchNode(final SSymbol selector, final boolean boundary) {
     this.selector = selector;
+    this.boundary = boundary;
   }
 
   private AbstractDispatchNode specialize(final Object[] arguments) {
@@ -43,8 +49,8 @@ public final class UninitializedDispatchNode extends AbstractDispatchNode {
     }
 
     if (chainDepth < INLINE_CACHE_SIZE) {
-      UninitializedDispatchNode newChainEnd = new UninitializedDispatchNode(selector);
-      AbstractDispatchNode node = createDispatch(rcvr, selector, newChainEnd);
+      UninitializedDispatchNode newChainEnd = new UninitializedDispatchNode(selector, boundary);
+      AbstractDispatchNode node = createDispatch(rcvr, selector, newChainEnd, boundary);
 
       replace(node);
       newChainEnd.notifyAsInserted();
@@ -59,7 +65,7 @@ public final class UninitializedDispatchNode extends AbstractDispatchNode {
   }
 
   public static AbstractDispatchNode createDispatch(final Object rcvr, final SSymbol selector,
-      final UninitializedDispatchNode newChainEnd) {
+      final UninitializedDispatchNode newChainEnd, final boolean boundary) {
     SClass rcvrClass = Types.getClassOf(rcvr);
     SInvokable method = rcvrClass.lookupInvokable(selector);
 
@@ -81,6 +87,9 @@ public final class UninitializedDispatchNode extends AbstractDispatchNode {
     }
 
     CallTarget callTarget = method.getCallTarget();
+    if (boundary) {
+      return new BoundaryDispatchNode(guard, callTarget, newChainEnd);
+    }
     return new CachedDispatchNode(guard, callTarget, newChainEnd);
   }
 

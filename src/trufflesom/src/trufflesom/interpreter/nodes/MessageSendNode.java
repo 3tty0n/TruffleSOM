@@ -51,6 +51,12 @@ public final class MessageSendNode {
         new GenericDispatchNode(selector)).initialize(coord);
   }
 
+  public static GenericMessageSendNode createBoundaryDispatch(final SSymbol selector,
+      final ExpressionNode[] argumentNodes, final long coord) {
+    return new GenericMessageSendNode(selector, argumentNodes,
+        new UninitializedDispatchNode(selector, true)).initialize(coord);
+  }
+
   public static AbstractMessageSendNode createBoundSelfSend(final SSymbol selector,
       final ExpressionNode[] arguments, final SInvokable method, final Assumption assumption,
       final long coord) {

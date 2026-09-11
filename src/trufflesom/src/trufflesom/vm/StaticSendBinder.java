@@ -6,8 +6,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.Truffle;
@@ -54,18 +56,25 @@ public final class StaticSendBinder {
   private static int                 genericSites;
   private static int                 matchedSites;
 
+  private static boolean         boundaryLoaded;
+  private static final Set<String> boundarySet = new HashSet<>();
+  private static int             boundarySites;
+
   private StaticSendBinder() {}
 
   public static void classLoaded(final SClass clazz) {
-    if (!(SendPlacement.AOT || SendPlacement.PGO) || clazz == null) {
+    boolean boundaryEnabled = SendPlacement.SEND_BOUNDARY != null;
+    if (!(SendPlacement.AOT || SendPlacement.PGO || boundaryEnabled) || clazz == null) {
       return;
     }
     hookStats();
     SClass metaclass = clazz.getSOMClass();
-    invalidateOverridden(clazz);
-    invalidateOverridden(metaclass);
-    classes.add(clazz);
-    classes.add(metaclass);
+    if (SendPlacement.AOT || SendPlacement.PGO) {
+      invalidateOverridden(clazz);
+      invalidateOverridden(metaclass);
+      classes.add(clazz);
+      classes.add(metaclass);
+    }
     if (SendPlacement.PGO) {
       if (!profileLoaded) {
         loadProfile();
@@ -73,8 +82,17 @@ public final class StaticSendBinder {
       markGenericSites(clazz);
       markGenericSites(metaclass);
     }
-    bindClass(clazz);
-    bindClass(metaclass);
+    if (boundaryEnabled) {
+      if (!boundaryLoaded) {
+        loadBoundary();
+      }
+      markBoundarySites(clazz);
+      markBoundarySites(metaclass);
+    }
+    if (SendPlacement.AOT || SendPlacement.PGO) {
+      bindClass(clazz);
+      bindClass(metaclass);
+    }
   }
 
   private static void hookStats() {
@@ -89,6 +107,9 @@ public final class StaticSendBinder {
               + " inlined_sites=" + inlined);
       if (SendPlacement.PGO) {
         System.err.println("pgo: generic_sites=" + genericSites + " matched=" + matchedSites);
+      }
+      if (SendPlacement.SEND_BOUNDARY != null) {
+        System.err.println("boundary: sites=" + boundarySites);
       }
     }));
   }
@@ -343,6 +364,76 @@ public final class StaticSendBinder {
     if (inv instanceof SMethod) {
       for (SMethod block : ((SMethod) inv).getEmbeddedBlocks()) {
         markGenericInvokable(block, clazz);
+      }
+    }
+  }
+
+
+  private static void loadBoundary() {
+    boundaryLoaded = true;
+    String path = SendPlacement.SEND_BOUNDARY;
+    if (path == null) {
+      return;
+    }
+    List<String> lines;
+    try {
+      lines = Files.readAllLines(Paths.get(path));
+    } catch (IOException e) {
+      return;
+    }
+
+    for (String line : lines) {
+      if (line.isEmpty()) {
+        continue;
+      }
+      String[] parts = line.split("\t", -1);
+      if (parts.length != 4 || parts[0].equals("holder")) {
+        continue;
+      }
+      String holder = parts[0];
+      String signature = parts[1];
+      String selector = parts[2];
+      int ordinal = Integer.parseInt(parts[3]);
+      boundarySet.add(key(holder, signature, selector, ordinal));
+    }
+  }
+
+  private static void markBoundarySites(final SClass clazz) {
+    if (clazz.getInstanceInvokablesForDisassembler() == null) {
+      return;
+    }
+    for (SInvokable inv : clazz.getInstanceInvokablesForDisassembler()) {
+      if (inv.getHolder() == clazz) {
+        markBoundaryInvokable(inv, clazz);
+      }
+    }
+  }
+
+  private static void markBoundaryInvokable(final SInvokable inv, final SClass clazz) {
+    inv.getCallTarget();
+    List<UninitializedMessageSendNode> nodes = new ArrayList<>(
+        NodeUtil.findAllNodeInstances(inv.getInvokable(), UninitializedMessageSendNode.class));
+    nodes.sort(Comparator.comparingLong(UninitializedMessageSendNode::getSourceCoordinate));
+
+    String holderName = clazz.getName().getString();
+    String sigName = inv.getSignature().getString();
+    Map<SSymbol, Integer> ordinalCounter = new HashMap<>();
+
+    for (UninitializedMessageSendNode node : nodes) {
+      SSymbol selector = node.getSelector();
+      int ordinal = ordinalCounter.merge(selector, 1, Integer::sum) - 1;
+
+      if (node.getParent() != null
+          && boundarySet.contains(key(holderName, sigName, selector.getString(), ordinal))) {
+        node.replace(MessageSendNode.createBoundaryDispatch(selector, node.getArgumentNodes(),
+            node.getSourceCoordinate()));
+        boundarySites++;
+      }
+    }
+
+    if (inv instanceof SMethod) {
+      for (SMethod block : ((SMethod) inv).getEmbeddedBlocks()) {
+        markBoundaryInvokable(block, clazz);
       }
     }
   }
