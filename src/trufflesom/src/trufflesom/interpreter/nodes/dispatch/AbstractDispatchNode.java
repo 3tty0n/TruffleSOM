@@ -81,6 +81,10 @@ public abstract class AbstractDispatchNode extends Node
   @Override
   public SourceSection getSourceSection() {
     AbstractMessageSendNode send = getSendNode();
+    if (send == null) {
+      // in the Bytecode DSL interpreter the chain hangs off a bytecode operation node
+      return null;
+    }
     return SourceCoordinate.createSourceSection(send, send.getSourceCoordinate());
   }
 
@@ -89,6 +93,7 @@ public abstract class AbstractDispatchNode extends Node
     while (i.getParent() instanceof AbstractDispatchNode) {
       i = i.getParent();
     }
-    return (AbstractMessageSendNode) i.getParent();
+    Node parent = i.getParent();
+    return parent instanceof AbstractMessageSendNode send ? send : null;
   }
 }
