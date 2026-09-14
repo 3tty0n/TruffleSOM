@@ -295,6 +295,70 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     }
   }
 
+  /** A message send with 0 arguments, so no argument array is built before dispatch. */
+  @Operation
+  @ConstantOperand(type = SSymbol.class)
+  public static final class Send0 {
+    @Specialization
+    public static Object doIt(final VirtualFrame frame, final SSymbol selector, final Object rcvr,
+        @Cached("createDispatch(selector)") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {rcvr});
+    }
+
+    @NeverDefault
+    protected static AbstractDispatchNode createDispatch(final SSymbol selector) {
+      return dispatchFor(selector);
+    }
+  }
+
+  /** A message send with 1 argument, so no argument array is built before dispatch. */
+  @Operation
+  @ConstantOperand(type = SSymbol.class)
+  public static final class Send1 {
+    @Specialization
+    public static Object doIt(final VirtualFrame frame, final SSymbol selector, final Object rcvr, final Object a1,
+        @Cached("createDispatch(selector)") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {rcvr, a1});
+    }
+
+    @NeverDefault
+    protected static AbstractDispatchNode createDispatch(final SSymbol selector) {
+      return dispatchFor(selector);
+    }
+  }
+
+  /** A message send with 2 arguments, so no argument array is built before dispatch. */
+  @Operation
+  @ConstantOperand(type = SSymbol.class)
+  public static final class Send2 {
+    @Specialization
+    public static Object doIt(final VirtualFrame frame, final SSymbol selector, final Object rcvr, final Object a1, final Object a2,
+        @Cached("createDispatch(selector)") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {rcvr, a1, a2});
+    }
+
+    @NeverDefault
+    protected static AbstractDispatchNode createDispatch(final SSymbol selector) {
+      return dispatchFor(selector);
+    }
+  }
+
+  /** A message send with 3 arguments, so no argument array is built before dispatch. */
+  @Operation
+  @ConstantOperand(type = SSymbol.class)
+  public static final class Send3 {
+    @Specialization
+    public static Object doIt(final VirtualFrame frame, final SSymbol selector, final Object rcvr, final Object a1, final Object a2, final Object a3,
+        @Cached("createDispatch(selector)") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {rcvr, a1, a2, a3});
+    }
+
+    @NeverDefault
+    protected static AbstractDispatchNode createDispatch(final SSymbol selector) {
+      return dispatchFor(selector);
+    }
+  }
+
   /** A super send; the target is resolved when the bytecode is built, as in the AST. */
   @Operation
   @ConstantOperand(type = SInvokable.class)

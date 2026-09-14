@@ -246,11 +246,23 @@ public final class AstToBytecodeDsl {
       return;
     }
 
-    b.beginSend(selector);
+    switch (args.length) {
+      case 1: b.beginSend0(selector); break;
+      case 2: b.beginSend1(selector); break;
+      case 3: b.beginSend2(selector); break;
+      case 4: b.beginSend3(selector); break;
+      default: b.beginSend(selector); break;
+    }
     for (ExpressionNode arg : args) {
       translate(arg);
     }
-    b.endSend();
+    switch (args.length) {
+      case 1: b.endSend0(); break;
+      case 2: b.endSend1(); break;
+      case 3: b.endSend2(); break;
+      case 4: b.endSend3(); break;
+      default: b.endSend(); break;
+    }
   }
 
   private Runnable[] pair(final Runnable begin, final Runnable end) {
