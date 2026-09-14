@@ -114,4 +114,9 @@ public final class SequenceNode extends NoPreEvalExprNode {
     }
     return super.hasTag(tag);
   }
+
+  public ExpressionNode[] getExpressions() {
+    return expressions;
+  }
+
 }

@@ -32,6 +32,10 @@ public final class LexicalScope implements Scope<LexicalScope, Method> {
     this.numberOfLocals = -1;
   }
 
+  public int getNumberOfLocals() {
+    return numberOfLocals;
+  }
+
   public FrameDescriptor getFrameDescriptor() {
     assert frameDescriptor != null : "Should not be accessed before initialized";
     return frameDescriptor;

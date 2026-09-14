@@ -144,4 +144,13 @@ public abstract class IntToDoInlinedLiteralsNode extends NoPreEvalExprNode {
     node.initialize(sourceCoord);
     replace(node);
   }
+
+  public ExpressionNode getBody() {
+    return body;
+  }
+
+  public Local getLoopIdxVar() {
+    return loopIdxVar;
+  }
+
 }

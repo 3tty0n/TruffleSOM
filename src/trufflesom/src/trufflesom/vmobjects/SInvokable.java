@@ -150,6 +150,11 @@ public abstract class SInvokable extends SAbstractObject {
     return ct;
   }
 
+  /** Used by the Bytecode DSL interpreter to install its root node for this method. */
+  public final void setInvokable(final Invokable invokable) {
+    this.invokable = invokable;
+  }
+
   public final Invokable getInvokable() {
     return invokable;
   }

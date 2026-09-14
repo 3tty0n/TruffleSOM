@@ -17,15 +17,26 @@ import trufflesom.vmobjects.SInvokable.SMethod;
 
 
 public abstract class Invokable extends RootNode implements WithSource {
-  protected final String name;
-  protected final Source source;
-  protected final long   sourceCoord;
+  protected String name;
+  protected Source source;
+  protected long   sourceCoord;
 
   protected SClass holder;
 
   protected Invokable(final String name, final Source source, final long sourceCoord,
       final FrameDescriptor frameDescriptor) {
     super(SomLanguage.getCurrent(), frameDescriptor);
+    this.name = name;
+    this.source = source;
+    this.sourceCoord = sourceCoord;
+  }
+
+  protected Invokable(final SomLanguage language, final FrameDescriptor frameDescriptor) {
+    super(language, frameDescriptor);
+  }
+
+  /** Used by the Bytecode DSL interpreter, whose root nodes are built before they are named. */
+  public void setInvokableInfo(final String name, final Source source, final long sourceCoord) {
     this.name = name;
     this.source = source;
     this.sourceCoord = sourceCoord;
@@ -67,7 +78,7 @@ public abstract class Invokable extends RootNode implements WithSource {
       SMethod toBeInlined);
 
   @Override
-  public final boolean isCloningAllowed() {
+  public boolean isCloningAllowed() {
     return true;
   }
 

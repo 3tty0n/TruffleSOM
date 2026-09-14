@@ -80,4 +80,5 @@ public final class UninitializedMessageSendNode extends AbstractMessageSendNode 
   public String getInvocationIdentifier() {
     return selector.getString();
   }
+
 }

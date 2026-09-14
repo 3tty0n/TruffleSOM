@@ -104,4 +104,17 @@ public final class WhileInlinedLiteralsNode extends NoPreEvalExprNode {
       }
     }
   }
+
+  public ExpressionNode getConditionNode() {
+    return ((WhileRepeatingNode) loopNode.getRepeatingNode()).conditionNode;
+  }
+
+  public ExpressionNode getBodyNode() {
+    return ((WhileRepeatingNode) loopNode.getRepeatingNode()).bodyNode;
+  }
+
+  public boolean getExpectedBool() {
+    return expectedBool;
+  }
+
 }

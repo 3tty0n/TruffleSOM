@@ -4,6 +4,7 @@ public class VmSettings {
 
   public static final boolean UseAstInterp;
   public static final boolean UseBcInterp;
+  public static final boolean UseBdslInterp;
   public static final boolean UseJitCompiler;
   public static final boolean PrintStackTraceOnDNU;
 
@@ -11,12 +12,13 @@ public class VmSettings {
 
   static {
     String val = System.getProperty("som.interp", "AST").toUpperCase();
-    UseAstInterp = "AST".equals(val);
+    UseBdslInterp = "BDSL".equals(val);
+    UseAstInterp = "AST".equals(val) || UseBdslInterp;
     UseBcInterp = "BC".equals(val);
 
     if (!UseAstInterp && !UseBcInterp) {
       throw new IllegalStateException("The Java property -Dsom.interp=" + val
-          + " was set, which is not supported. Currently, only the values BC and AST are supported.");
+          + " was set, which is not supported. Currently, only the values BC, AST, and BDSL are supported.");
     }
 
     val = System.getProperty("som.jitCompiler", "true");

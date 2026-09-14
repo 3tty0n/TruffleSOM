@@ -87,6 +87,14 @@ public abstract class ArgumentReadNode {
       this.valueNode = valueNode;
     }
 
+    public final int getArgumentIndex() {
+      return argumentIndex;
+    }
+
+    public final ExpressionNode getValueNode() {
+      return valueNode;
+    }
+
     @Override
     public final Object executeGeneric(final VirtualFrame frame) {
       Object value = valueNode.executeGeneric(frame);
@@ -161,6 +169,14 @@ public abstract class ArgumentReadNode {
       this.argumentIndex = arg.index;
 
       this.valueNode = valueNode;
+    }
+
+    public final int getArgumentIndex() {
+      return argumentIndex;
+    }
+
+    public final ExpressionNode getValueNode() {
+      return valueNode;
     }
 
     @Override

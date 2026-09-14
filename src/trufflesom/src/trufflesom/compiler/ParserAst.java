@@ -57,6 +57,7 @@ import trufflesom.primitives.Primitives;
 import trufflesom.vm.Globals;
 import trufflesom.vm.NotYetImplementedException;
 import trufflesom.vm.SymbolTable;
+import trufflesom.vm.VmSettings;
 import trufflesom.vmobjects.SArray;
 import trufflesom.vmobjects.SClass;
 import trufflesom.vmobjects.SInvokable;
@@ -273,7 +274,9 @@ public class ParserAst extends Parser<MethodGenerationContext> {
 
     String binSelector = msg.getString();
 
-    if (binSelector.equals("=")) {
+    if (VmSettings.UseBdslInterp) {
+      // the Bytecode DSL interpreter does not use the parser's supernodes
+    } else if (binSelector.equals("=")) {
       if (operand instanceof GenericLiteralNode) {
         Object literal = operand.executeGeneric(null);
         if (literal instanceof String s) {

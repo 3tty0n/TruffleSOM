@@ -38,4 +38,13 @@ public final class IfNotNilInlinedLiteralNode extends NoPreEvalExprNode {
     return r;
   }
 
+
+  public ExpressionNode getRcvr() {
+    return rcvr;
+  }
+
+  public ExpressionNode getArg1() {
+    return arg1;
+  }
+
 }

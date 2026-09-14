@@ -79,4 +79,17 @@ public abstract class IfTrueIfFalseInlinedLiteralsNode extends NoPreEvalExprNode
           inlinedTrueNode);
     }
   }
+
+  public ExpressionNode getConditionNode() {
+    return conditionNode;
+  }
+
+  public ExpressionNode getTrueNode() {
+    return trueNode;
+  }
+
+  public ExpressionNode getFalseNode() {
+    return falseNode;
+  }
+
 }

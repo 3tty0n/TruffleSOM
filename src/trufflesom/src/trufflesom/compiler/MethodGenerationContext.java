@@ -58,7 +58,9 @@ import trufflesom.interpreter.supernodes.inc.IncExpWithValueNode;
 import trufflesom.interpreter.supernodes.LocalVariableSquareNode;
 import trufflesom.interpreter.supernodes.NonLocalVariableSquareNode;
 import trufflesom.interpreter.supernodes.inc.UninitIncFieldWithExpNode;
+import trufflesom.compiler.bdsl.AstToBytecodeDsl;
 import trufflesom.primitives.Primitives;
+import trufflesom.vm.VmSettings;
 import trufflesom.primitives.arithmetic.AdditionPrim;
 import trufflesom.vmobjects.SClass;
 import trufflesom.vmobjects.SInvokable;
@@ -244,6 +246,10 @@ public class MethodGenerationContext
     if (structuralProbe != null) {
       String id = meth.getIdentifier();
       structuralProbe.recordNewMethod(symbolFor(id), meth);
+    }
+
+    if (VmSettings.UseBdslInterp && outerGenc == null) {
+      AstToBytecodeDsl.install(meth);
     }
 
     // return the method - the holder field is to be set later on!

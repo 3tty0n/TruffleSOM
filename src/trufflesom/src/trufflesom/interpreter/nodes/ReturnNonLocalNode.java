@@ -103,6 +103,14 @@ public final class ReturnNonLocalNode extends ContextualNode {
 
     private final int onStackMarkerIndex;
 
+    public ExpressionNode getExpression() {
+      return expression;
+    }
+
+    public Internal getOnStackMarkerVar() {
+      return onStackMarkerVar;
+    }
+
     private ReturnLocalNode(final ExpressionNode exp, final Internal onStackMarker) {
       this.expression = exp;
 
@@ -160,6 +168,10 @@ public final class ReturnNonLocalNode extends ContextualNode {
       return methodBody;
     }
 
+    public Internal getOnStackMarkerVar() {
+      return onStackMarkerVar;
+    }
+
     @Override
     public Object executeGeneric(final VirtualFrame frame) {
       FrameOnStackMarker marker = new FrameOnStackMarker();
@@ -190,4 +202,13 @@ public final class ReturnNonLocalNode extends ContextualNode {
       }
     }
   }
+
+  public ExpressionNode getExpression() {
+    return expression;
+  }
+
+  public Internal getOnStackMarkerVar() {
+    return onStackMarkerVar;
+  }
+
 }

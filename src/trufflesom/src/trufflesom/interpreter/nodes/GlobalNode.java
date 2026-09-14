@@ -347,4 +347,9 @@ public abstract class GlobalNode extends ExpressionNode
       return new CachedLiteralNode(DispatchGuard.create(rcvr), source, Nil.nilObject, next);
     }
   }
+
+  public SSymbol getGlobalName() {
+    return globalName;
+  }
+
 }

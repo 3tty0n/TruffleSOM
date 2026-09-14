@@ -14,6 +14,7 @@ import trufflesom.interpreter.nodes.dispatch.GenericDispatchNode;
 import trufflesom.interpreter.nodes.dispatch.UninitializedDispatchNode;
 import trufflesom.primitives.Primitives;
 import trufflesom.vm.NotYetImplementedException;
+import trufflesom.vm.VmSettings;
 import trufflesom.vmobjects.SClass;
 import trufflesom.vmobjects.SInvokable;
 import trufflesom.vmobjects.SSymbol;
@@ -23,6 +24,10 @@ public final class MessageSendNode {
 
   public static ExpressionNode create(final SSymbol selector,
       final ExpressionNode[] arguments, final long coord) {
+    if (VmSettings.UseBdslInterp) {
+      return new UninitializedMessageSendNode(selector, arguments).initialize(coord);
+    }
+
     Specializer<ExpressionNode, SSymbol> specializer =
         Primitives.Current.getParserSpecializer(selector, arguments);
     if (specializer == null) {
@@ -157,6 +162,10 @@ public final class MessageSendNode {
           "Currently #dnu with super sent is not yet implemented. ");
     }
 
+    if (VmSettings.UseBdslInterp) {
+      return new BdslSuperSendNode(selector, arguments, method).initialize(coord);
+    }
+
     PreevaluatedExpression node = method.copyTrivialNode();
     if (node != null) {
       return new SuperExprNode(selector, arguments, node).initialize(coord);
@@ -166,6 +175,36 @@ public final class MessageSendNode {
         method.getCallTarget());
 
     return new SuperSendNode(selector, arguments, superMethodNode).initialize(coord);
+  }
+
+  /**
+   * A parse-time placeholder for a super send, used only by the Bytecode DSL translator, which
+   * reads the resolved method off it. It is never executed.
+   */
+  public static final class BdslSuperSendNode extends AbstractMessageSendNode {
+    private final SSymbol    selector;
+    private final SInvokable method;
+
+    private BdslSuperSendNode(final SSymbol selector, final ExpressionNode[] arguments,
+        final SInvokable method) {
+      super(selector.getNumberOfSignatureArguments(), arguments);
+      this.selector = selector;
+      this.method = method;
+    }
+
+    public SInvokable getMethod() {
+      return method;
+    }
+
+    @Override
+    public Object doPreEvaluated(final VirtualFrame frame, final Object[] arguments) {
+      throw new NotYetImplementedException();
+    }
+
+    @Override
+    public String getInvocationIdentifier() {
+      return selector.getString();
+    }
   }
 
   public static final class SuperSendNode extends AbstractMessageSendNode {

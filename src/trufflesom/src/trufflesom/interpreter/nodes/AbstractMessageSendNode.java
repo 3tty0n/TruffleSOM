@@ -38,4 +38,9 @@ public abstract class AbstractMessageSendNode extends ExpressionNode
   public final int getNumberOfArguments() {
     return numArguments;
   }
+
+  public ExpressionNode[] getArgumentNodes() {
+    return argumentNodes;
+  }
+
 }

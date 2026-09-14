@@ -97,4 +97,13 @@ public abstract class BooleanInlinedLiteralNode extends NoPreEvalExprNode {
     }
   }
 
+
+  public ExpressionNode getReceiverNode() {
+    return receiverNode;
+  }
+
+  public ExpressionNode getArgumentNode() {
+    return argumentNode;
+  }
+
 }

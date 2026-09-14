@@ -161,4 +161,9 @@ public final class Method extends Invokable {
       final AbstractDispatchNode next) {
     return body.asDispatchNode(rcvr, source, next);
   }
+
+  public ExpressionNode getBody() {
+    return body;
+  }
+
 }
