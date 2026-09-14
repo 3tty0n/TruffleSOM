@@ -274,8 +274,8 @@ public class ParserAst extends Parser<MethodGenerationContext> {
 
     String binSelector = msg.getString();
 
-    if (VmSettings.UseBdslInterp) {
-      // the Bytecode DSL interpreter does not use the parser's supernodes
+    if (!VmSettings.UseSupernodes) {
+      // -Dsom.supernodes=false, and always for the Bytecode DSL interpreter
     } else if (binSelector.equals("=")) {
       if (operand instanceof GenericLiteralNode) {
         Object literal = operand.executeGeneric(null);

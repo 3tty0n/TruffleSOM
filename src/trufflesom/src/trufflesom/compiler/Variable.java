@@ -26,6 +26,7 @@ import trufflesom.interpreter.nodes.LocalVariableNodeFactory.LocalVariableWriteN
 import trufflesom.interpreter.nodes.NonLocalVariableNode.NonLocalVariableReadNode;
 import trufflesom.interpreter.nodes.NonLocalVariableNodeFactory.NonLocalVariableReadNodeGen;
 import trufflesom.interpreter.nodes.NonLocalVariableNodeFactory.NonLocalVariableWriteNodeGen;
+import trufflesom.vm.VmSettings;
 import trufflesom.interpreter.supernodes.LocalVariableReadSquareWriteNodeGen;
 import trufflesom.interpreter.supernodes.LocalVariableSquareNodeGen;
 import trufflesom.interpreter.supernodes.NonLocalVariableReadSquareWriteNodeGen;
@@ -252,7 +253,7 @@ public abstract class Variable {
 
     public ExpressionNode getWriteNode(final int contextLevel,
         final ExpressionNode valueExpr, final long coordinate) {
-      if (valueExpr instanceof AdditionPrim add) {
+      if (VmSettings.UseSupernodes && valueExpr instanceof AdditionPrim add) {
         ExpressionNode rcvr = add.getReceiver();
         ExpressionNode arg = add.getArgument();
 

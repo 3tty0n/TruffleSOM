@@ -5,6 +5,7 @@ public class VmSettings {
   public static final boolean UseAstInterp;
   public static final boolean UseBcInterp;
   public static final boolean UseBdslInterp;
+  public static final boolean UseSupernodes;
   public static final boolean UseJitCompiler;
   public static final boolean PrintStackTraceOnDNU;
 
@@ -20,6 +21,9 @@ public class VmSettings {
       throw new IllegalStateException("The Java property -Dsom.interp=" + val
           + " was set, which is not supported. Currently, only the values BC, AST, and BDSL are supported.");
     }
+
+    val = System.getProperty("som.supernodes", "true");
+    UseSupernodes = !UseBdslInterp && "true".equals(val);
 
     val = System.getProperty("som.jitCompiler", "true");
     UseJitCompiler = "true".equals(val);

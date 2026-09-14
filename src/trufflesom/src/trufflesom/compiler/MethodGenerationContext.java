@@ -478,7 +478,7 @@ public class MethodGenerationContext
       return incNode.createIncFieldNode(self, fieldIndex, coord);
     }
 
-    if (exp instanceof AdditionPrim add) {
+    if (VmSettings.UseSupernodes && exp instanceof AdditionPrim add) {
       ExpressionNode rcvr = add.getReceiver();
       ExpressionNode arg = add.getArgument();
 
