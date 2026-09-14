@@ -236,11 +236,77 @@ public final class AstToBytecodeDsl {
   }
 
   private void translateSend(final SSymbol selector, final ExpressionNode[] args) {
+    Runnable[] prim = primitiveOp(selector.getString(), args.length);
+    if (prim != null) {
+      prim[0].run();
+      for (ExpressionNode arg : args) {
+        translate(arg);
+      }
+      prim[1].run();
+      return;
+    }
+
     b.beginSend(selector);
     for (ExpressionNode arg : args) {
       translate(arg);
     }
     b.endSend();
+  }
+
+  private Runnable[] pair(final Runnable begin, final Runnable end) {
+    return new Runnable[] {begin, end};
+  }
+
+  /**
+   * The begin/end builder calls for the dedicated operation of a selector that the AST parser
+   * specialises eagerly ({@code Primitives.getParserSpecializer}), or {@code null} when the
+   * send has to go through the dispatch chain.
+   */
+  private Runnable[] primitiveOp(final String selector, final int arity) {
+    if (arity == 2) {
+      switch (selector) {
+        case "+": return pair(b::beginPrimAdd, b::endPrimAdd);
+        case "-": return pair(b::beginPrimSub, b::endPrimSub);
+        case "*": return pair(b::beginPrimMul, b::endPrimMul);
+        case "/": return pair(b::beginPrimDiv, b::endPrimDiv);
+        case "//": return pair(b::beginPrimDoubleDiv, b::endPrimDoubleDiv);
+        case "%": return pair(b::beginPrimMod, b::endPrimMod);
+        case "rem:": return pair(b::beginPrimRem, b::endPrimRem);
+        case "&": return pair(b::beginPrimLogicAnd, b::endPrimLogicAnd);
+        case "bitXor:": return pair(b::beginPrimBitXor, b::endPrimBitXor);
+        case "<<": return pair(b::beginPrimLeftShift, b::endPrimLeftShift);
+        case ">>>": return pair(b::beginPrimUnsignedRightShift, b::endPrimUnsignedRightShift);
+        case "min:": return pair(b::beginPrimMin, b::endPrimMin);
+        case "max:": return pair(b::beginPrimMax, b::endPrimMax);
+        case "<": return pair(b::beginPrimLessThan, b::endPrimLessThan);
+        case "<=": return pair(b::beginPrimLessThanOrEqual, b::endPrimLessThanOrEqual);
+        case ">": return pair(b::beginPrimGreaterThan, b::endPrimGreaterThan);
+        case ">=": return pair(b::beginPrimGreaterThanOrEqual, b::endPrimGreaterThanOrEqual);
+        case "=": return pair(b::beginPrimEquals, b::endPrimEquals);
+        case "<>": return pair(b::beginPrimUnequals, b::endPrimUnequals);
+        case "==": return pair(b::beginPrimIdentical, b::endPrimIdentical);
+        case "~=": return pair(b::beginPrimNotIdentical, b::endPrimNotIdentical);
+        default: return null;
+      }
+    }
+
+    if (arity == 1) {
+      switch (selector) {
+        case "abs": return pair(b::beginPrimAbs, b::endPrimAbs);
+        case "negated": return pair(b::beginPrimNegated, b::endPrimNegated);
+        case "asDouble": return pair(b::beginPrimAsDouble, b::endPrimAsDouble);
+        case "as32BitSignedValue":
+          return pair(b::beginPrimAs32BitSignedValue, b::endPrimAs32BitSignedValue);
+        case "as32BitUnsignedValue":
+          return pair(b::beginPrimAs32BitUnsignedValue, b::endPrimAs32BitUnsignedValue);
+        case "not": return pair(b::beginPrimNot, b::endPrimNot);
+        case "isNil": return pair(b::beginIsNil, b::endIsNil);
+        case "notNil": return pair(b::beginIsNotNil, b::endIsNotNil);
+        default: return null;
+      }
+    }
+
+    return null;
   }
 
   private void translateGlobal(final GlobalNode global) {

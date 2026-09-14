@@ -14,6 +14,8 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.profiles.InlinedBranchProfile;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
@@ -38,7 +40,35 @@ import trufflesom.interpreter.nodes.dispatch.UninitializedDispatchNode;
 import trufflesom.interpreter.objectstorage.FieldAccessorNode;
 import trufflesom.interpreter.objectstorage.FieldAccessorNode.AbstractReadFieldNode;
 import trufflesom.interpreter.objectstorage.FieldAccessorNode.AbstractWriteFieldNode;
+import trufflesom.primitives.arithmetic.AdditionPrim;
+import trufflesom.primitives.arithmetic.BitXorPrim;
+import trufflesom.primitives.arithmetic.DividePrim;
+import trufflesom.primitives.arithmetic.DoubleDivPrim;
+import trufflesom.primitives.arithmetic.GreaterThanOrEqualPrim;
+import trufflesom.primitives.arithmetic.GreaterThanPrim;
+import trufflesom.primitives.arithmetic.LessThanOrEqualPrim;
+import trufflesom.primitives.arithmetic.LessThanPrim;
+import trufflesom.primitives.arithmetic.LogicAndPrim;
+import trufflesom.primitives.arithmetic.ModuloPrim;
+import trufflesom.primitives.arithmetic.MultiplicationPrim;
+import trufflesom.primitives.arithmetic.RemainderPrim;
+import trufflesom.primitives.arithmetic.SubtractionPrim;
+import trufflesom.primitives.basics.EqualsEqualsPrim;
+import trufflesom.primitives.basics.EqualsPrim;
+import trufflesom.primitives.basics.IntegerPrims.AbsPrim;
+import trufflesom.primitives.basics.IntegerPrims.As32BitSignedValue;
+import trufflesom.primitives.basics.IntegerPrims.As32BitUnsignedValue;
+import trufflesom.primitives.basics.IntegerPrims.AsDoubleValue;
+import trufflesom.primitives.basics.IntegerPrims.LeftShiftPrim;
+import trufflesom.primitives.basics.IntegerPrims.MaxIntPrim;
+import trufflesom.primitives.basics.IntegerPrims.MinIntPrim;
+import trufflesom.primitives.basics.IntegerPrims.NegatedValue;
+import trufflesom.primitives.basics.IntegerPrims.UnsignedRightShiftPrim;
+import trufflesom.primitives.basics.UnequalUnequalPrim;
+import trufflesom.primitives.basics.UnequalsPrim;
+import trufflesom.interpreter.nodes.specialized.NotMessageNode;
 import trufflesom.vm.Classes;
+import trufflesom.vm.SymbolTable;
 import trufflesom.vm.SendPlacement;
 import trufflesom.vm.constants.Nil;
 import trufflesom.vmobjects.SAbstractObject;
@@ -234,6 +264,13 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     }
   }
 
+  @NeverDefault
+  protected static AbstractDispatchNode dispatchFor(final SSymbol selector) {
+    return SendPlacement.JIT
+        ? new GenericDispatchNode(selector)
+        : new UninitializedDispatchNode(selector);
+  }
+
   /** A message send, with the AST interpreter's inline-cache chain behind it. */
   @Operation
   @ConstantOperand(type = SSymbol.class)
@@ -247,9 +284,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
 
     @NeverDefault
     protected static AbstractDispatchNode createDispatch(final SSymbol selector) {
-      return SendPlacement.JIT
-          ? new GenericDispatchNode(selector)
-          : new UninitializedDispatchNode(selector);
+      return dispatchFor(selector);
     }
   }
 
@@ -468,5 +503,867 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
       return value + step;
     }
   }
+
+  /** The eagerly specialised {@code +}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimAdd {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("+");
+
+    @Specialization(rewriteOn = ArithmeticException.class)
+    public static long doLL(final long a, final long b) {
+      return AdditionPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static Object doLLBig(final long a, final long b) {
+      return AdditionPrim.doLongWithOverflow(a, b);
+    }
+
+    @Specialization
+    public static double doLD(final long a, final double b) {
+      return AdditionPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doDD(final double a, final double b) {
+      return AdditionPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static double doDL(final double a, final long b) {
+      return AdditionPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code -}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimSub {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("-");
+
+    @Specialization(rewriteOn = ArithmeticException.class)
+    public static long doLL(final long a, final long b) {
+      return SubtractionPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static Object doLLBig(final long a, final long b) {
+      return SubtractionPrim.doLongWithOverflow(a, b);
+    }
+
+    @Specialization
+    public static double doLD(final long a, final double b) {
+      return SubtractionPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doDD(final double a, final double b) {
+      return SubtractionPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static double doDL(final double a, final long b) {
+      return SubtractionPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code *}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimMul {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("*");
+
+    @Specialization(rewriteOn = ArithmeticException.class)
+    public static long doLL(final long a, final long b) {
+      return MultiplicationPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static Object doLLBig(final long a, final long b) {
+      return MultiplicationPrim.doLongWithOverflow(a, b);
+    }
+
+    @Specialization
+    public static double doLD(final long a, final double b) {
+      return MultiplicationPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doDD(final double a, final double b) {
+      return MultiplicationPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static double doDL(final double a, final long b) {
+      return MultiplicationPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code /}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimDiv {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("/");
+
+    @Specialization
+    public static long doLL(final long a, final long b) {
+      return DividePrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static long doLD(final long a, final double b) {
+      return DividePrim.doLong(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code //}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimDoubleDiv {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("//");
+
+    @Specialization
+    public static double doLL(final long a, final long b) {
+      return DoubleDivPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doLD(final long a, final double b) {
+      return DoubleDivPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doDD(final double a, final double b) {
+      return DoubleDivPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static double doDL(final double a, final long b) {
+      return DoubleDivPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code %}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimMod {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("%");
+
+    @Specialization
+    public static long doLL(final long a, final long b) {
+      return ModuloPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doLD(final long a, final double b) {
+      return ModuloPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doDD(final double a, final double b) {
+      return ModuloPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static double doDL(final double a, final long b) {
+      return ModuloPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code rem:}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimRem {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("rem:");
+
+    @Specialization(rewriteOn = ArithmeticException.class)
+    public static long doLL(final long a, final long b) {
+      return RemainderPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doLD(final long a, final double b) {
+      return RemainderPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static double doDD(final double a, final double b) {
+      return RemainderPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static double doDL(final double a, final long b) {
+      return RemainderPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code &}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimLogicAnd {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("&");
+
+    @Specialization
+    public static long doLL(final long a, final long b) {
+      return LogicAndPrim.doLong(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code bitXor:}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimBitXor {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("bitXor:");
+
+    @Specialization
+    public static long doLL(final long a, final long b) {
+      return BitXorPrim.doLong(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code >>>}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimUnsignedRightShift {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor(">>>");
+
+    @Specialization
+    public static long doLL(final long a, final long b) {
+      return UnsignedRightShiftPrim.doLong(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code min:}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimMin {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("min:");
+
+    @Specialization
+    public static long doLL(final long a, final long b) {
+      return MinIntPrim.doLong(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code max:}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimMax {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("max:");
+
+    @Specialization
+    public static long doLL(final long a, final long b) {
+      return MaxIntPrim.doLong(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code <}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimLessThan {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("<");
+
+    @Specialization
+    public static boolean doLL(final long a, final long b) {
+      return LessThanPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doLD(final long a, final double b) {
+      return LessThanPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doDD(final double a, final double b) {
+      return LessThanPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static boolean doDL(final double a, final long b) {
+      return LessThanPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code <=}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimLessThanOrEqual {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("<=");
+
+    @Specialization
+    public static boolean doLL(final long a, final long b) {
+      return LessThanOrEqualPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doLD(final long a, final double b) {
+      return LessThanOrEqualPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doDD(final double a, final double b) {
+      return LessThanOrEqualPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static boolean doDL(final double a, final long b) {
+      return LessThanOrEqualPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code >}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimGreaterThan {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor(">");
+
+    @Specialization
+    public static boolean doLL(final long a, final long b) {
+      return GreaterThanPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doLD(final long a, final double b) {
+      return GreaterThanPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doDD(final double a, final double b) {
+      return GreaterThanPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static boolean doDL(final double a, final long b) {
+      return GreaterThanPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code >=}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimGreaterThanOrEqual {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor(">=");
+
+    @Specialization
+    public static boolean doLL(final long a, final long b) {
+      return GreaterThanOrEqualPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doLD(final long a, final double b) {
+      return GreaterThanOrEqualPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doDD(final double a, final double b) {
+      return GreaterThanOrEqualPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static boolean doDL(final double a, final long b) {
+      return GreaterThanOrEqualPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code =}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimEquals {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("=");
+
+    @Specialization
+    public static boolean doBB(final boolean a, final boolean b) {
+      return EqualsPrim.doBoolean(a, b);
+    }
+
+    @Specialization
+    public static boolean doLL(final long a, final long b) {
+      return EqualsPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doLD(final long a, final double b) {
+      return EqualsPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doDD(final double a, final double b) {
+      return EqualsPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static boolean doDL(final double a, final long b) {
+      return EqualsPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code <>}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimUnequals {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("<>");
+
+    @Specialization
+    public static boolean doBB(final boolean a, final boolean b) {
+      return UnequalsPrim.doBoolean(a, b);
+    }
+
+    @Specialization
+    public static boolean doLL(final long a, final long b) {
+      return UnequalsPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doLD(final long a, final double b) {
+      return UnequalsPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doDD(final double a, final double b) {
+      return UnequalsPrim.doDouble(a, b);
+    }
+
+    @Specialization
+    public static boolean doDL(final double a, final long b) {
+      return UnequalsPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code ==}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimIdentical {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("==");
+
+    @Specialization
+    public static boolean doLL(final long a, final long b) {
+      return EqualsEqualsPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doDD(final double a, final double b) {
+      return EqualsEqualsPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code ~=}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimNotIdentical {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("~=");
+
+    @Specialization
+    public static boolean doLL(final long a, final long b) {
+      return UnequalUnequalPrim.doLong(a, b);
+    }
+
+    @Specialization
+    public static boolean doDD(final double a, final double b) {
+      return UnequalUnequalPrim.doDouble(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
+  /** The eagerly specialised {@code negated}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimNegated {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("negated");
+
+    @Specialization
+    public static long doL(final long a) {
+      return NegatedValue.doLong(a);
+    }
+
+    @Specialization
+    public static double doD(final double a) {
+      return NegatedValue.doDouble(a);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a});
+    }
+  }
+
+  /** The eagerly specialised {@code asDouble}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimAsDouble {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("asDouble");
+
+    @Specialization
+    public static double doL(final long a) {
+      return AsDoubleValue.doLong(a);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a});
+    }
+  }
+
+  /** The eagerly specialised {@code as32BitSignedValue}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimAs32BitSignedValue {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("as32BitSignedValue");
+
+    @Specialization
+    public static long doL(final long a) {
+      return As32BitSignedValue.doLong(a);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a});
+    }
+  }
+
+  /** The eagerly specialised {@code as32BitUnsignedValue}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimAs32BitUnsignedValue {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("as32BitUnsignedValue");
+
+    @Specialization
+    public static long doL(final long a) {
+      return As32BitUnsignedValue.doLong(a);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a});
+    }
+  }
+
+  /** The eagerly specialised {@code not}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimNot {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("not");
+
+    @Specialization
+    public static boolean doB(final boolean a) {
+      return NotMessageNode.doNot(a);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a});
+    }
+  }
+
+  /** The eagerly specialised {@code abs}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimAbs {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("abs");
+
+    @Specialization(guards = "!minLong(a)")
+    public static long doL(final long a) {
+      return AbsPrim.doLong(a);
+    }
+
+    @Specialization
+    public static double doD(final double a) {
+      return Math.abs(a);
+    }
+
+    protected static boolean minLong(final long a) {
+      return AbsPrim.minLong(a);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a});
+    }
+  }
+
+  /** The eagerly specialised {@code <<}, as the AST parser builds it. */
+  @Operation
+  public static final class PrimLeftShift {
+    static final SSymbol SELECTOR = SymbolTable.symbolFor("<<");
+
+    @Specialization(rewriteOn = ArithmeticException.class)
+    public static long doLL(final long a, final long b,
+        @Cached final InlinedBranchProfile overflow, @Bind final Node node) {
+      return LeftShiftPrim.doLong(a, b, overflow, node);
+    }
+
+    @Specialization
+    public static Object doLLBig(final long a, final long b) {
+      return LeftShiftPrim.doLongWithOverflow(a, b);
+    }
+
+
+    @NeverDefault
+    protected static AbstractDispatchNode dispatch() {
+      return dispatchFor(SELECTOR);
+    }
+
+    @Fallback
+    public static Object doSend(final VirtualFrame frame, final Object a, final Object b,
+        @Cached("dispatch()") final AbstractDispatchNode dispatch) {
+      return dispatch.executeDispatch(frame, new Object[] {a, b});
+    }
+  }
+
 
 }
