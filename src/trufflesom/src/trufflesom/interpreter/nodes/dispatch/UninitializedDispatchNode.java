@@ -48,7 +48,7 @@ public final class UninitializedDispatchNode extends AbstractDispatchNode {
       }
     }
 
-    if (chainDepth < INLINE_CACHE_SIZE) {
+    if (chainDepth < SEND_CACHE_SIZE) {
       UninitializedDispatchNode newChainEnd = new UninitializedDispatchNode(selector, boundary);
       AbstractDispatchNode node = createDispatch(rcvr, selector, newChainEnd, boundary);
 
@@ -57,7 +57,7 @@ public final class UninitializedDispatchNode extends AbstractDispatchNode {
       return node;
     }
 
-    // the chain is longer than the maximum defined by INLINE_CACHE_SIZE and
+    // the chain is longer than the maximum defined by SEND_CACHE_SIZE and
     // thus, this callsite is considered to be megaprophic, and we generalize it.
     GenericDispatchNode genericReplacement = new GenericDispatchNode(selector);
     first.replace(genericReplacement);

@@ -23,6 +23,9 @@ public abstract class AbstractDispatchNode extends Node
     implements DispatchChain, InstrumentableNode, WithSource {
   public static final int INLINE_CACHE_SIZE = 6;
 
+  public static final int SEND_CACHE_SIZE =
+      Integer.getInteger("som.inlineCacheSize", INLINE_CACHE_SIZE);
+
   @NeverDefault
   public static AbstractDispatchNode create(final SSymbol selector) {
     return new UninitializedDispatchNode(selector);

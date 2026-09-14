@@ -2,9 +2,12 @@ package trufflesom.interpreter.nodes.specialized.whileloops;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
@@ -21,8 +24,7 @@ import trufflesom.vm.constants.Nil;
 @Inline(selector = "whileFalse:", inlineableArgIdx = {0, 1}, additionalArgs = False.class)
 public final class WhileInlinedLiteralsNode extends NoPreEvalExprNode {
 
-  @Child private ExpressionNode conditionNode;
-  @Child private ExpressionNode bodyNode;
+  @Child private LoopNode loopNode;
 
   private final boolean expectedBool;
 
@@ -32,56 +34,74 @@ public final class WhileInlinedLiteralsNode extends NoPreEvalExprNode {
   public WhileInlinedLiteralsNode(final ExpressionNode originalConditionNode,
       final ExpressionNode originalBodyNode, final ExpressionNode inlinedConditionNode,
       final ExpressionNode inlinedBodyNode, final boolean expectedBool) {
-    this.conditionNode = inlinedConditionNode;
-    this.bodyNode = inlinedBodyNode;
     this.expectedBool = expectedBool;
+    this.loopNode = Truffle.getRuntime().createLoopNode(
+        new WhileRepeatingNode(inlinedConditionNode, inlinedBodyNode, expectedBool));
     this.conditionActualNode = originalConditionNode;
     this.bodyActualNode = originalBodyNode;
   }
 
-  private boolean evaluateCondition(final VirtualFrame frame) {
-    try {
-      return conditionNode.executeBoolean(frame);
-    } catch (UnexpectedResultException e) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-      // TODO: should rewrite to a node that does a proper message send...
-      throw new UnsupportedSpecializationException(this,
-          new Node[] {conditionNode}, e.getResult());
-    }
-  }
-
   @Override
   public Object executeGeneric(final VirtualFrame frame) {
-    long iterationCount = 0;
-
-    // TODO: this is a simplification, we don't cover the case receiver isn't a boolean
-    boolean loopConditionResult = evaluateCondition(frame);
-
-    try {
-      while (loopConditionResult == expectedBool) {
-        bodyNode.executeGeneric(frame);
-        loopConditionResult = evaluateCondition(frame);
-
-        if (CompilerDirectives.inInterpreter()) {
-          iterationCount++;
-        }
-      }
-    } finally {
-      if (CompilerDirectives.inInterpreter()) {
-        reportLoopCount(iterationCount);
-      }
-    }
+    loopNode.execute(frame);
     return Nil.nilObject;
   }
 
-  protected void reportLoopCount(final long count) {
-    CompilerAsserts.neverPartOfCompilation("reportLoopCount");
-    Node current = getParent();
-    while (current != null && !(current instanceof RootNode)) {
-      current = current.getParent();
+  private static final class WhileRepeatingNode extends Node implements RepeatingNode {
+
+    @Child private ExpressionNode conditionNode;
+    @Child private ExpressionNode bodyNode;
+
+    private final boolean expectedBool;
+
+    private long iterationCount;
+
+    WhileRepeatingNode(final ExpressionNode conditionNode, final ExpressionNode bodyNode,
+        final boolean expectedBool) {
+      this.conditionNode = conditionNode;
+      this.bodyNode = bodyNode;
+      this.expectedBool = expectedBool;
     }
-    if (current != null) {
-      ((Invokable) current).propagateLoopCountThroughoutLexicalScope(count);
+
+    private boolean evaluateCondition(final VirtualFrame frame) {
+      try {
+        return conditionNode.executeBoolean(frame);
+      } catch (UnexpectedResultException e) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        throw new UnsupportedSpecializationException(this,
+            new Node[] {conditionNode}, e.getResult());
+      }
+    }
+
+    @Override
+    public boolean executeRepeating(final VirtualFrame frame) {
+      if (evaluateCondition(frame) != expectedBool) {
+        if (CompilerDirectives.inInterpreter()) {
+          long count = iterationCount;
+          iterationCount = 0;
+          reportLoopCount(count);
+        }
+        return false;
+      }
+      bodyNode.executeGeneric(frame);
+      if (CompilerDirectives.inInterpreter()) {
+        iterationCount += 1;
+      }
+      return true;
+    }
+
+    private void reportLoopCount(final long count) {
+      if (count < 1) {
+        return;
+      }
+      CompilerAsserts.neverPartOfCompilation("reportLoopCount");
+      Node current = getParent();
+      while (current != null && !(current instanceof RootNode)) {
+        current = current.getParent();
+      }
+      if (current != null) {
+        ((Invokable) current).propagateLoopCountThroughoutLexicalScope(count);
+      }
     }
   }
 }
