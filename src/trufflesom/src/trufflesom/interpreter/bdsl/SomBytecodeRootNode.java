@@ -5,6 +5,7 @@ import com.oracle.truffle.api.bytecode.BytecodeNode;
 import com.oracle.truffle.api.bytecode.BytecodeRootNode;
 import com.oracle.truffle.api.bytecode.ConstantOperand;
 import com.oracle.truffle.api.bytecode.EpilogReturn;
+import com.oracle.truffle.api.bytecode.ForceQuickening;
 import com.oracle.truffle.api.bytecode.LocalAccessor;
 import com.oracle.truffle.api.bytecode.GenerateBytecode;
 import com.oracle.truffle.api.bytecode.Operation;
@@ -169,6 +170,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @EpilogReturn
   public static final class ClearOnStackMarker {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final VirtualFrame frame, final Object returnValue,
         @Bind final BytecodeNode bytecodeNode, @Bind final SomBytecodeRootNode root) {
       root.clearMarker(frame, bytecodeNode);
@@ -228,6 +230,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = int.class)
   public static final class GetContext {
     @Specialization
+    @ForceQuickening
     public static MaterializedFrame doIt(final VirtualFrame frame, final int contextLevel) {
       return ContextualNode.determineContext(frame, contextLevel);
     }
@@ -238,6 +241,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = int.class)
   public static final class LoadOuterArgument {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final int index, final MaterializedFrame ctx) {
       return ctx.getArguments()[index];
     }
@@ -247,6 +251,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = int.class)
   public static final class StoreArgument {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final VirtualFrame frame, final int index, final Object value) {
       frame.getArguments()[index] = value;
       return value;
@@ -257,6 +262,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = int.class)
   public static final class StoreOuterArgument {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final int index, final MaterializedFrame ctx,
         final Object value) {
       ctx.getArguments()[index] = value;
@@ -276,6 +282,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = SSymbol.class)
   public static final class Send {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final VirtualFrame frame, final SSymbol selector,
         @Variadic final Object[] arguments,
         @Cached("createDispatch(selector)") final AbstractDispatchNode dispatch) {
@@ -293,6 +300,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = SInvokable.class)
   public static final class SuperSend {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final SInvokable method, @Variadic final Object[] arguments,
         @Cached("createCall(method)") final DirectCallNode call) {
       return call.call(arguments);
@@ -308,6 +316,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = int.class)
   public static final class FieldRead {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final int fieldIndex, final Object self,
         @Cached("createRead(fieldIndex)") final AbstractReadFieldNode read) {
       return read.read((SObject) self);
@@ -323,6 +332,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = int.class)
   public static final class FieldWrite {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final int fieldIndex, final Object self, final Object value,
         @Cached("createWrite(fieldIndex)") final AbstractWriteFieldNode write) {
       return write.write((SObject) self, value);
@@ -338,6 +348,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = SSymbol.class)
   public static final class GlobalRead {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final VirtualFrame frame, final SSymbol globalName,
         @Cached("createGlobal(globalName)") final GlobalNode global) {
       return global.executeGeneric(frame);
@@ -354,6 +365,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = boolean.class)
   public static final class CreateBlock {
     @Specialization
+    @ForceQuickening
     public static SBlock doIt(final VirtualFrame frame, final SMethod blockMethod,
         final boolean withContext,
         @Cached("blockClass(blockMethod)") final SClass blockClass) {
@@ -372,6 +384,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = LocalAccessor.class)
   public static final class InitOnStackMarker {
     @Specialization
+    @ForceQuickening
     public static void doIt(final VirtualFrame frame, final LocalAccessor marker,
         @Bind final BytecodeNode bytecodeNode) {
       marker.setObject(bytecodeNode, frame, new FrameOnStackMarker());
@@ -383,6 +396,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @ConstantOperand(type = int.class)
   public static final class NonLocalReturn {
     @Specialization
+    @ForceQuickening
     public static Object doIt(final VirtualFrame frame, final int contextLevel,
         final Object markerObj, final Object value) {
       FrameOnStackMarker marker = (FrameOnStackMarker) markerObj;
@@ -404,6 +418,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @Operation
   public static final class AsBool {
     @Specialization
+    @ForceQuickening
     public static boolean doBool(final boolean value) {
       return value;
     }
@@ -417,6 +432,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @Operation
   public static final class NotBool {
     @Specialization
+    @ForceQuickening
     public static boolean doBool(final boolean value) {
       return !value;
     }
@@ -430,6 +446,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @Operation
   public static final class IsNil {
     @Specialization
+    @ForceQuickening
     public static boolean doIt(final Object value) {
       return value == Nil.nilObject;
     }
@@ -438,6 +455,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @Operation
   public static final class IsNotNil {
     @Specialization
+    @ForceQuickening
     public static boolean doIt(final Object value) {
       return value != Nil.nilObject;
     }
@@ -447,6 +465,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @Operation
   public static final class LessOrEqual {
     @Specialization
+    @ForceQuickening
     public static boolean doLong(final long a, final long b) {
       return a <= b;
     }
@@ -457,6 +476,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDouble(final double a, final double b) {
       return a <= b;
     }
@@ -471,6 +491,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @Operation
   public static final class GreaterOrEqual {
     @Specialization
+    @ForceQuickening
     public static boolean doLong(final long a, final long b) {
       return a >= b;
     }
@@ -481,6 +502,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDouble(final double a, final double b) {
       return a >= b;
     }
@@ -494,11 +516,13 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
   @Operation
   public static final class Step {
     @Specialization
+    @ForceQuickening
     public static long doLong(final long value, final long step) {
       return value + step;
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDouble(final double value, final long step) {
       return value + step;
     }
@@ -510,6 +534,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("+");
 
     @Specialization(rewriteOn = ArithmeticException.class)
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return AdditionPrim.doLong(a, b);
     }
@@ -520,16 +545,19 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     }
 
     @Specialization
+    @ForceQuickening
     public static double doLD(final long a, final double b) {
       return AdditionPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDD(final double a, final double b) {
       return AdditionPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDL(final double a, final long b) {
       return AdditionPrim.doDouble(a, b);
     }
@@ -553,6 +581,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("-");
 
     @Specialization(rewriteOn = ArithmeticException.class)
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return SubtractionPrim.doLong(a, b);
     }
@@ -563,16 +592,19 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     }
 
     @Specialization
+    @ForceQuickening
     public static double doLD(final long a, final double b) {
       return SubtractionPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDD(final double a, final double b) {
       return SubtractionPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDL(final double a, final long b) {
       return SubtractionPrim.doDouble(a, b);
     }
@@ -596,6 +628,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("*");
 
     @Specialization(rewriteOn = ArithmeticException.class)
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return MultiplicationPrim.doLong(a, b);
     }
@@ -606,16 +639,19 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     }
 
     @Specialization
+    @ForceQuickening
     public static double doLD(final long a, final double b) {
       return MultiplicationPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDD(final double a, final double b) {
       return MultiplicationPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDL(final double a, final long b) {
       return MultiplicationPrim.doDouble(a, b);
     }
@@ -639,11 +675,13 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("/");
 
     @Specialization
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return DividePrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static long doLD(final long a, final double b) {
       return DividePrim.doLong(a, b);
     }
@@ -667,21 +705,25 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("//");
 
     @Specialization
+    @ForceQuickening
     public static double doLL(final long a, final long b) {
       return DoubleDivPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doLD(final long a, final double b) {
       return DoubleDivPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDD(final double a, final double b) {
       return DoubleDivPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDL(final double a, final long b) {
       return DoubleDivPrim.doDouble(a, b);
     }
@@ -705,21 +747,25 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("%");
 
     @Specialization
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return ModuloPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doLD(final long a, final double b) {
       return ModuloPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDD(final double a, final double b) {
       return ModuloPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDL(final double a, final long b) {
       return ModuloPrim.doDouble(a, b);
     }
@@ -743,21 +789,25 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("rem:");
 
     @Specialization(rewriteOn = ArithmeticException.class)
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return RemainderPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doLD(final long a, final double b) {
       return RemainderPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDD(final double a, final double b) {
       return RemainderPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doDL(final double a, final long b) {
       return RemainderPrim.doDouble(a, b);
     }
@@ -781,6 +831,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("&");
 
     @Specialization
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return LogicAndPrim.doLong(a, b);
     }
@@ -804,6 +855,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("bitXor:");
 
     @Specialization
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return BitXorPrim.doLong(a, b);
     }
@@ -827,6 +879,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor(">>>");
 
     @Specialization
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return UnsignedRightShiftPrim.doLong(a, b);
     }
@@ -850,6 +903,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("min:");
 
     @Specialization
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return MinIntPrim.doLong(a, b);
     }
@@ -873,6 +927,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("max:");
 
     @Specialization
+    @ForceQuickening
     public static long doLL(final long a, final long b) {
       return MaxIntPrim.doLong(a, b);
     }
@@ -896,21 +951,25 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("<");
 
     @Specialization
+    @ForceQuickening
     public static boolean doLL(final long a, final long b) {
       return LessThanPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doLD(final long a, final double b) {
       return LessThanPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDD(final double a, final double b) {
       return LessThanPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDL(final double a, final long b) {
       return LessThanPrim.doDouble(a, b);
     }
@@ -934,21 +993,25 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("<=");
 
     @Specialization
+    @ForceQuickening
     public static boolean doLL(final long a, final long b) {
       return LessThanOrEqualPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doLD(final long a, final double b) {
       return LessThanOrEqualPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDD(final double a, final double b) {
       return LessThanOrEqualPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDL(final double a, final long b) {
       return LessThanOrEqualPrim.doDouble(a, b);
     }
@@ -972,21 +1035,25 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor(">");
 
     @Specialization
+    @ForceQuickening
     public static boolean doLL(final long a, final long b) {
       return GreaterThanPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doLD(final long a, final double b) {
       return GreaterThanPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDD(final double a, final double b) {
       return GreaterThanPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDL(final double a, final long b) {
       return GreaterThanPrim.doDouble(a, b);
     }
@@ -1010,21 +1077,25 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor(">=");
 
     @Specialization
+    @ForceQuickening
     public static boolean doLL(final long a, final long b) {
       return GreaterThanOrEqualPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doLD(final long a, final double b) {
       return GreaterThanOrEqualPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDD(final double a, final double b) {
       return GreaterThanOrEqualPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDL(final double a, final long b) {
       return GreaterThanOrEqualPrim.doDouble(a, b);
     }
@@ -1048,26 +1119,31 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("=");
 
     @Specialization
+    @ForceQuickening
     public static boolean doBB(final boolean a, final boolean b) {
       return EqualsPrim.doBoolean(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doLL(final long a, final long b) {
       return EqualsPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doLD(final long a, final double b) {
       return EqualsPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDD(final double a, final double b) {
       return EqualsPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDL(final double a, final long b) {
       return EqualsPrim.doDouble(a, b);
     }
@@ -1091,26 +1167,31 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("<>");
 
     @Specialization
+    @ForceQuickening
     public static boolean doBB(final boolean a, final boolean b) {
       return UnequalsPrim.doBoolean(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doLL(final long a, final long b) {
       return UnequalsPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doLD(final long a, final double b) {
       return UnequalsPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDD(final double a, final double b) {
       return UnequalsPrim.doDouble(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDL(final double a, final long b) {
       return UnequalsPrim.doDouble(a, b);
     }
@@ -1134,11 +1215,13 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("==");
 
     @Specialization
+    @ForceQuickening
     public static boolean doLL(final long a, final long b) {
       return EqualsEqualsPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDD(final double a, final double b) {
       return EqualsEqualsPrim.doDouble(a, b);
     }
@@ -1162,11 +1245,13 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("~=");
 
     @Specialization
+    @ForceQuickening
     public static boolean doLL(final long a, final long b) {
       return UnequalUnequalPrim.doLong(a, b);
     }
 
     @Specialization
+    @ForceQuickening
     public static boolean doDD(final double a, final double b) {
       return UnequalUnequalPrim.doDouble(a, b);
     }
@@ -1190,11 +1275,13 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("negated");
 
     @Specialization
+    @ForceQuickening
     public static long doL(final long a) {
       return NegatedValue.doLong(a);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doD(final double a) {
       return NegatedValue.doDouble(a);
     }
@@ -1218,6 +1305,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("asDouble");
 
     @Specialization
+    @ForceQuickening
     public static double doL(final long a) {
       return AsDoubleValue.doLong(a);
     }
@@ -1241,6 +1329,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("as32BitSignedValue");
 
     @Specialization
+    @ForceQuickening
     public static long doL(final long a) {
       return As32BitSignedValue.doLong(a);
     }
@@ -1264,6 +1353,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("as32BitUnsignedValue");
 
     @Specialization
+    @ForceQuickening
     public static long doL(final long a) {
       return As32BitUnsignedValue.doLong(a);
     }
@@ -1287,6 +1377,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("not");
 
     @Specialization
+    @ForceQuickening
     public static boolean doB(final boolean a) {
       return NotMessageNode.doNot(a);
     }
@@ -1310,11 +1401,13 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("abs");
 
     @Specialization(guards = "!minLong(a)")
+    @ForceQuickening
     public static long doL(final long a) {
       return AbsPrim.doLong(a);
     }
 
     @Specialization
+    @ForceQuickening
     public static double doD(final double a) {
       return Math.abs(a);
     }
@@ -1342,6 +1435,7 @@ public abstract class SomBytecodeRootNode extends Invokable implements BytecodeR
     static final SSymbol SELECTOR = SymbolTable.symbolFor("<<");
 
     @Specialization(rewriteOn = ArithmeticException.class)
+    @ForceQuickening
     public static long doLL(final long a, final long b,
         @Cached final InlinedBranchProfile overflow, @Bind final Node node) {
       return LeftShiftPrim.doLong(a, b, overflow, node);
