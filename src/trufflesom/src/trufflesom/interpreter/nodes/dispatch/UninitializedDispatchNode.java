@@ -3,11 +3,17 @@ package trufflesom.interpreter.nodes.dispatch;
 import static com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 
 import trufflesom.bdt.primitives.nodes.PreevaluatedExpression;
+import trufflesom.interpreter.SArguments;
 import trufflesom.interpreter.Types;
+import trufflesom.vm.DeferredRespec;
+import trufflesom.vmobjects.SArray;
 import trufflesom.vmobjects.SClass;
 import trufflesom.vmobjects.SInvokable;
 import trufflesom.vmobjects.SObject;
@@ -17,6 +23,12 @@ import trufflesom.vmobjects.SSymbol;
 public final class UninitializedDispatchNode extends AbstractDispatchNode {
   private final SSymbol selector;
   private final boolean boundary;
+
+  private Object[] deferredRcvrs;
+  private int      deferredCount;
+  private boolean  deferredOverflow;
+  private long     deferredHits;
+  private boolean  deferredDone;
 
   public UninitializedDispatchNode(final SSymbol selector) {
     this(selector, false);
@@ -65,7 +77,7 @@ public final class UninitializedDispatchNode extends AbstractDispatchNode {
   }
 
   public static AbstractDispatchNode createDispatch(final Object rcvr, final SSymbol selector,
-      final UninitializedDispatchNode newChainEnd, final boolean boundary) {
+      final AbstractDispatchNode newChainEnd, final boolean boundary) {
     SClass rcvrClass = Types.getClassOf(rcvr);
     SInvokable method = rcvrClass.lookupInvokable(selector);
 
@@ -93,8 +105,99 @@ public final class UninitializedDispatchNode extends AbstractDispatchNode {
     return new CachedDispatchNode(guard, callTarget, newChainEnd);
   }
 
+  /**
+   * Deferred re-specialisation: the miss happened in compiled code, so instead of
+   * invalidating the enclosing unit, look the method up behind a boundary and call it
+   * indirectly, keeping the receiver for a later batched chain extension.
+   */
+  @TruffleBoundary
+  private Object deferredDispatch(final Object[] arguments) {
+    Object rcvr = arguments[0];
+    DeferredRespec.sendSlow(deferredHits == 0);
+    deferredHits++;
+    record(rcvr);
+
+    SClass rcvrClass = Types.getClassOf(rcvr);
+    SInvokable method = rcvrClass.lookupInvokable(selector);
+
+    CallTarget target;
+    Object[] args;
+    if (method != null) {
+      target = method.getCallTarget();
+      args = arguments;
+    } else {
+      SArray argumentsArray = SArguments.getArgumentsWithoutReceiver(arguments);
+      args = new Object[] {rcvr, selector, argumentsArray};
+      target = CachedDnuNode.getDnuCallTarget(rcvrClass);
+    }
+
+    Object result = IndirectCallNode.getUncached().call(target, args);
+
+    if (DeferredRespec.THRESHOLD > 0 && !deferredDone
+        && deferredHits >= DeferredRespec.THRESHOLD) {
+      deferredDone = true;
+      DeferredRespec.sendExtension();
+      extendChain();
+    }
+    return result;
+  }
+
+  private void record(final Object rcvr) {
+    if (deferredOverflow) {
+      return;
+    }
+    if (deferredRcvrs == null) {
+      deferredRcvrs = new Object[SEND_CACHE_SIZE];
+    }
+    SClass rcvrClass = Types.getClassOf(rcvr);
+    for (int k = 0; k < deferredCount; k++) {
+      if (Types.getClassOf(deferredRcvrs[k]) == rcvrClass) {
+        return;
+      }
+    }
+    if (deferredCount == deferredRcvrs.length) {
+      deferredOverflow = true;
+      return;
+    }
+    deferredRcvrs[deferredCount++] = rcvr;
+  }
+
+  /** Splices all recorded receivers into the chain at once; one invalidation, not one per class. */
+  private void extendChain() {
+    Node i = this;
+    int chainDepth = 0;
+    while (i.getParent() instanceof AbstractDispatchNode) {
+      i = i.getParent();
+      chainDepth++;
+    }
+    AbstractDispatchNode first = (AbstractDispatchNode) i;
+
+    if (deferredOverflow || chainDepth + deferredCount > SEND_CACHE_SIZE) {
+      first.replace(new GenericDispatchNode(selector));
+      return;
+    }
+
+    UninitializedDispatchNode newChainEnd = new UninitializedDispatchNode(selector, boundary);
+    AbstractDispatchNode head = newChainEnd;
+    for (int k = deferredCount - 1; k >= 0; k--) {
+      Object rcvr = deferredRcvrs[k];
+      if (rcvr instanceof SObject) {
+        ((SObject) rcvr).updateLayoutToMatchClass();
+      }
+      head = createDispatch(rcvr, selector, head, boundary);
+    }
+
+    replace(head);
+    newChainEnd.notifyAsInserted();
+    deferredRcvrs = null;
+    deferredCount = 0;
+  }
+
   @Override
   public Object executeDispatch(final VirtualFrame frame, final Object[] arguments) {
+    if (DeferredRespec.ON && CompilerDirectives.inCompiledCode()) {
+      return deferredDispatch(arguments);
+    }
     transferToInterpreterAndInvalidate();
     return specialize(arguments).executeDispatch(frame, arguments);
   }

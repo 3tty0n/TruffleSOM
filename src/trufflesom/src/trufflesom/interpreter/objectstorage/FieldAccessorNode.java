@@ -2,6 +2,7 @@ package trufflesom.interpreter.objectstorage;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.nodes.InvalidAssumptionException;
@@ -13,6 +14,7 @@ import trufflesom.interpreter.nodes.SOMNode;
 import trufflesom.interpreter.objectstorage.StorageLocation.AbstractObjectStorageLocation;
 import trufflesom.interpreter.objectstorage.StorageLocation.DoubleStorageLocation;
 import trufflesom.interpreter.objectstorage.StorageLocation.LongStorageLocation;
+import trufflesom.vm.DeferredRespec;
 import trufflesom.vm.VmSettings;
 import trufflesom.vm.constants.Nil;
 import trufflesom.vmobjects.SObject;
@@ -115,6 +117,11 @@ public abstract class FieldAccessorNode extends Node {
 
     private final int chainLength;
 
+    private SObject[] deferred;
+    private int       deferredCount;
+    private boolean   deferredDone;
+    private long      deferredHits;
+
     UninitializedReadFieldNode(final int fieldIndex, int chainLength) {
       super(fieldIndex);
       this.chainLength = chainLength;
@@ -123,9 +130,62 @@ public abstract class FieldAccessorNode extends Node {
     @Override
     @InliningCutoff
     public Object read(final SObject obj) {
+      if (DeferredRespec.ON && CompilerDirectives.inCompiledCode()) {
+        return deferredRead(obj);
+      }
       CompilerDirectives.transferToInterpreterAndInvalidate();
       return specialize(obj, chainLength, "uninitialized node",
           new UninitializedReadFieldNode(fieldIndex, chainLength + 1)).read(obj);
+    }
+
+    @TruffleBoundary
+    private Object deferredRead(final SObject obj) {
+      DeferredRespec.fieldSlow(deferredHits == 0);
+      deferredHits++;
+      if (obj.hasOutdatedLayout()) {
+        obj.updateLayoutToMatchClass();
+      }
+      recordLayout(obj);
+      Object result = obj.getLocation(fieldIndex).read(obj);
+      if (DeferredRespec.THRESHOLD > 0 && !deferredDone
+          && deferredHits >= DeferredRespec.THRESHOLD) {
+        deferredDone = true;
+        DeferredRespec.fieldExtension();
+        extendChain();
+      }
+      return result;
+    }
+
+    private void recordLayout(final SObject obj) {
+      if (deferred == null) {
+        deferred = new SObject[INLINE_CACHE_SIZE];
+      }
+      ObjectLayout layout = obj.getObjectLayout();
+      for (int k = 0; k < deferredCount; k++) {
+        if (deferred[k].getObjectLayout() == layout) {
+          return;
+        }
+      }
+      if (deferredCount < deferred.length) {
+        deferred[deferredCount++] = obj;
+      }
+    }
+
+    /** Splices every recorded layout into the chain; one invalidation, not one per layout. */
+    private void extendChain() {
+      UninitializedReadFieldNode cur = this;
+      for (int k = 0; k < deferredCount; k++) {
+        UninitializedReadFieldNode next =
+            new UninitializedReadFieldNode(fieldIndex, cur.chainLength + 1);
+        AbstractReadFieldNode added =
+            cur.specialize(deferred[k], cur.chainLength, "deferred respec", next);
+        if (!(added instanceof ReadSpecializedFieldNode)) {
+          break;
+        }
+        cur = next;
+      }
+      deferred = null;
+      deferredCount = 0;
     }
   }
 
@@ -359,14 +419,71 @@ public abstract class FieldAccessorNode extends Node {
   private static final class UninitializedWriteFieldNode extends AbstractWriteFieldNode {
     private final int chainLength;
 
+    private SObject[] deferred;
+    private int       deferredCount;
+    private boolean   deferredDone;
+    private long      deferredHits;
+
     UninitializedWriteFieldNode(final int fieldIndex, int chainLength) {
       super(fieldIndex);
       this.chainLength = chainLength;
     }
 
+    @TruffleBoundary
+    private Object deferredWrite(final SObject obj, final Object value) {
+      DeferredRespec.fieldSlow(deferredHits == 0);
+      deferredHits++;
+      obj.setField(fieldIndex, value);
+      recordLayout(obj);
+      if (DeferredRespec.THRESHOLD > 0 && !deferredDone
+          && deferredHits >= DeferredRespec.THRESHOLD) {
+        deferredDone = true;
+        DeferredRespec.fieldExtension();
+        extendChain();
+      }
+      return value;
+    }
+
+    private void recordLayout(final SObject obj) {
+      if (deferred == null) {
+        deferred = new SObject[INLINE_CACHE_SIZE];
+      }
+      ObjectLayout layout = obj.getObjectLayout();
+      for (int k = 0; k < deferredCount; k++) {
+        if (deferred[k].getObjectLayout() == layout) {
+          return;
+        }
+      }
+      if (deferredCount < deferred.length) {
+        deferred[deferredCount++] = obj;
+      }
+    }
+
+    private void extendChain() {
+      UninitializedWriteFieldNode cur = this;
+      for (int k = 0; k < deferredCount; k++) {
+        SObject obj = deferred[k];
+        if (cur.chainLength >= INLINE_CACHE_SIZE) {
+          cur.replace(new GenericWriteFieldNode(fieldIndex), "megamorphic write node");
+          break;
+        }
+        UninitializedWriteFieldNode next =
+            new UninitializedWriteFieldNode(fieldIndex, cur.chainLength + 1);
+        final ObjectLayout layout = obj.getObjectLayout();
+        cur.replace(layout.getStorageLocation(fieldIndex).getWriteNode(fieldIndex, layout, next),
+            "deferred respec");
+        cur = next;
+      }
+      deferred = null;
+      deferredCount = 0;
+    }
+
     @Override
     @InliningCutoff
     public Object write(final SObject obj, final Object value) {
+      if (DeferredRespec.ON && CompilerDirectives.inCompiledCode()) {
+        return deferredWrite(obj, value);
+      }
       CompilerDirectives.transferToInterpreterAndInvalidate();
       obj.setField(fieldIndex, value);
 
